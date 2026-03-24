@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PROJECT 3 – Simple CPU Simulator</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --bg2: #181c27;
+    --bg3: #1e2436;
+    --border: #2a3050;
+    --accent: #4f8ef7;
+    --accent2: #34d399;
+    --accent3: #f59e0b;
+    --accent4: #ef4444;
+    --text: #e2e8f0;
+    --text2: #94a3b8;
+    --text3: #64748b;
+    --mono: 'Courier New', monospace;
+    --sans: 'Segoe UI', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; }
+  
+  /* Layout */
+  .header { background: var(--bg2); border-bottom: 1px solid var(--border); padding: 16px 24px; display: flex; align-items: center; gap: 16px; }
+  .header h1 { font-size: 18px; font-weight: 600; color: var(--accent); letter-spacing: 0.5px; }
+  .header .subtitle { font-size: 12px; color: var(--text3); }
+  .badge { background: var(--bg3); border: 1px solid var(--border); border-radius: 4px; padding: 2px 8px; font-size: 11px; color: var(--text2); }
+  
+  .main { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto auto auto; gap: 1px; background: var(--border); height: calc(100vh - 57px); }
+  
+  .panel { background: var(--bg); padding: 16px; overflow: auto; }
+  .panel-header { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text3); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .panel-header::before { content: ''; display: inline-block; width: 3px; height: 12px; background: var(--accent); border-radius: 2px; }
+
+  /* Registers */
+  .reg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .reg-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; transition: border-color 0.3s, background 0.3s; }
+  .reg-card.active { border-color: var(--accent); background: rgba(79,142,247,0.08); }
+  .reg-card.active-green { border-color: var(--accent2); background: rgba(52,211,153,0.08); }
+  .reg-label { font-size: 11px; color: var(--text3); font-weight: 600; letter-spacing: 0.5px; }
+  .reg-name { font-size: 13px; font-weight: 600; color: var(--text2); }
+  .reg-val { font-family: var(--mono); font-size: 20px; font-weight: 700; color: var(--accent); }
+  .reg-val.green { color: var(--accent2); }
+  .reg-val.amber { color: var(--accent3); }
+  .reg-val.red { color: var(--accent4); }
+
+  /* Memory */
+  .mem-table { width: 100%; font-family: var(--mono); font-size: 12px; border-collapse: collapse; }
+  .mem-table th { color: var(--text3); font-size: 10px; text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--border); text-transform: uppercase; letter-spacing: 1px; }
+  .mem-table td { padding: 4px 8px; border-bottom: 1px solid rgba(42,48,80,0.5); color: var(--text2); }
+  .mem-table tr.pc-row td { background: rgba(79,142,247,0.12); color: var(--accent); }
+  .mem-table tr.modified td { background: rgba(52,211,153,0.08); color: var(--accent2); }
+  .mem-row-addr { color: var(--text3); }
+
+  /* Program editor */
+  .prog-area { background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; font-family: var(--mono); font-size: 13px; color: var(--text); width: 100%; height: 220px; padding: 12px; resize: none; outline: none; line-height: 1.7; }
+  .prog-area:focus { border-color: var(--accent); }
+
+  /* Controls */
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .btn { border: 1px solid var(--border); background: var(--bg2); color: var(--text); font-size: 13px; font-weight: 500; border-radius: 5px; padding: 7px 16px; cursor: pointer; transition: all 0.15s; display: flex; align-items: center; gap: 6px; }
+  .btn:hover { background: var(--bg3); border-color: var(--accent); color: var(--accent); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover { background: #6fa3ff; }
+  .btn.danger { border-color: var(--accent4); color: var(--accent4); }
+  .btn.danger:hover { background: rgba(239,68,68,0.1); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* Instruction cycle */
+  .cycle-steps { display: flex; gap: 0; margin-bottom: 16px; }
+  .cycle-step { flex: 1; text-align: center; padding: 8px 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text3); border-bottom: 2px solid var(--border); transition: all 0.3s; }
+  .cycle-step.active { color: var(--accent); border-color: var(--accent); }
+  .cycle-step.done { color: var(--accent2); border-color: var(--accent2); }
+
+  /* Output log */
+  .log { background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; height: 180px; overflow-y: auto; padding: 10px 12px; font-family: var(--mono); font-size: 12px; line-height: 1.7; }
+  .log-entry { border-bottom: 1px solid rgba(42,48,80,0.4); padding: 2px 0; }
+  .log-entry .cyc { color: var(--text3); }
+  .log-entry .instr { color: var(--accent3); }
+  .log-entry .msg { color: var(--text2); }
+  .log-entry.error .msg { color: var(--accent4); }
+  .log-entry.halt .msg { color: var(--accent2); }
+
+  /* Datapath SVG area */
+  .datapath-wrap { background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; padding: 8px; }
+  .datapath-wrap svg text { font-family: var(--sans); }
+
+  /* Instruction reference */
+  .iref { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .iref-row { background: var(--bg2); border: 1px solid var(--border); border-radius: 5px; padding: 8px 10px; }
+  .iref-op { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--accent); }
+  .iref-desc { font-size: 11px; color: var(--text3); margin-top: 2px; }
+  .iref-ex { font-family: var(--mono); font-size: 11px; color: var(--text2); margin-top: 3px; }
+
+  /* Speed control */
+  .speed-row { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 12px; color: var(--text3); }
+  input[type=range] { accent-color: var(--accent); cursor: pointer; }
+
+  /* Status bar */
+  .statusbar { position: fixed; bottom: 0; left: 0; right: 0; background: var(--bg2); border-top: 1px solid var(--border); padding: 6px 24px; font-size: 11px; color: var(--text3); display: flex; gap: 24px; z-index: 10; }
+  .statusbar .item b { color: var(--accent); }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: var(--bg2); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  /* Responsive: stack on small screens */
+  @media (max-width: 820px) {
+    .main { grid-template-columns: 1fr; height: auto; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>PROJECT 3 — Simple CPU Simulator</h1>
+    <div class="subtitle">Basic Computer Design · Instruction Cycle Simulation</div>
+  </div>
+  <span class="badge">LOAD · STORE · ADD · SUB · JUMP</span>
+  <span class="badge" id="cpu-status-badge">IDLE</span>
+</div>
+
+<div class="main" style="grid-template-columns: 1fr 1fr; grid-template-rows: auto auto; height: calc(100vh - 57px - 30px);">
+
+  <!-- Panel 1: Program Editor + Controls -->
+  <div class="panel" style="grid-row: 1; grid-column: 1;">
+    <div class="panel-header">Program Editor</div>
+
+    <div class="iref" style="margin-bottom:12px;">
+      <div class="iref-row"><div class="iref-op">LOAD addr</div><div class="iref-desc">ACC ← Mem[addr]</div><div class="iref-ex">LOAD 10</div></div>
+      <div class="iref-row"><div class="iref-op">STORE addr</div><div class="iref-desc">Mem[addr] ← ACC</div><div class="iref-ex">STORE 11</div></div>
+      <div class="iref-row"><div class="iref-op">ADD addr</div><div class="iref-desc">ACC ← ACC + Mem[addr]</div><div class="iref-ex">ADD 12</div></div>
+      <div class="iref-row"><div class="iref-op">SUB addr</div><div class="iref-desc">ACC ← ACC − Mem[addr]</div><div class="iref-ex">SUB 13</div></div>
+      <div class="iref-row"><div class="iref-op">JUMP addr</div><div class="iref-desc">PC ← addr</div><div class="iref-ex">JUMP 0</div></div>
+      <div class="iref-row"><div class="iref-op">HALT</div><div class="iref-desc">Stop execution</div><div class="iref-ex">HALT</div></div>
+    </div>
+
+    <textarea class="prog-area" id="prog-editor" spellcheck="false">; Sample Program: Add two numbers
+; Mem[10] = 5, Mem[11] = 3 → Result in Mem[12]
+
+LOAD 10      ; ACC = Mem[10] = 5
+ADD 11       ; ACC = ACC + Mem[11] = 8
+STORE 12     ; Mem[12] = ACC = 8
+HALT</textarea>
+
+    <div style="margin-top:10px; margin-bottom:4px; font-size:11px; color:var(--text3);">
+      Data Memory (editable, addresses 10–19):
+    </div>
+    <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px;" id="data-inputs">
+    </div>
+
+    <div class="controls">
+      <button class="btn primary" onclick="loadProgram()">▶ Load Program</button>
+      <button class="btn" id="btn-step" onclick="stepCPU()" disabled>Step ›</button>
+      <button class="btn" id="btn-run" onclick="runCPU()" disabled>Run ▶▶</button>
+      <button class="btn" id="btn-pause" onclick="pauseCPU()" disabled>⏸ Pause</button>
+      <button class="btn danger" onclick="resetCPU()">↺ Reset</button>
+    </div>
+    <div class="speed-row">
+      Speed: <input type="range" id="speed-slider" min="50" max="1000" value="500" style="width:100px">
+      <span id="speed-label">500ms</span>
+    </div>
+  </div>
+
+  <!-- Panel 2: CPU Registers + Datapath -->
+  <div class="panel" style="grid-row: 1; grid-column: 2; display:flex; flex-direction:column; gap:14px;">
+    <div>
+      <div class="panel-header">CPU Registers</div>
+      <div class="reg-grid">
+        <div class="reg-card" id="reg-pc">
+          <div><div class="reg-label">REGISTER</div><div class="reg-name">Program Counter (PC)</div></div>
+          <div class="reg-val" id="val-pc">0</div>
+        </div>
+        <div class="reg-card" id="reg-ir">
+          <div><div class="reg-label">REGISTER</div><div class="reg-name">Instruction Reg (IR)</div></div>
+          <div class="reg-val amber" style="font-size:14px" id="val-ir">—</div>
+        </div>
+        <div class="reg-card" id="reg-acc">
+          <div><div class="reg-label">REGISTER</div><div class="reg-name">Accumulator (ACC)</div></div>
+          <div class="reg-val green" id="val-acc">0</div>
+        </div>
+        <div class="reg-card" id="reg-mar">
+          <div><div class="reg-label">REGISTER</div><div class="reg-name">Mem Address Reg (MAR)</div></div>
+          <div class="reg-val" id="val-mar">—</div>
+        </div>
+        <div class="reg-card" id="reg-mdr">
+          <div><div class="reg-label">REGISTER</div><div class="reg-name">Mem Data Reg (MDR)</div></div>
+          <div class="reg-val" id="val-mdr">—</div>
+        </div>
+        <div class="reg-card" id="reg-cu">
+          <div><div class="reg-label">UNIT</div><div class="reg-name">Control Unit (CU)</div></div>
+          <div class="reg-val" style="font-size:12px; text-align:right" id="val-cu">IDLE</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Instruction Cycle Phase Indicator -->
+    <div>
+      <div class="panel-header">Instruction Cycle</div>
+      <div class="cycle-steps" id="cycle-steps">
+        <div class="cycle-step" id="step-fetch">Fetch</div>
+        <div class="cycle-step" id="step-decode">Decode</div>
+        <div class="cycle-step" id="step-execute">Execute</div>
+        <div class="cycle-step" id="step-writeback">Write Back</div>
+      </div>
+      <div id="cycle-desc" style="font-size:12px; color:var(--text3); min-height:32px; padding:4px 0;">
+        Load a program and press Step or Run to begin execution.
+      </div>
+    </div>
+
+    <!-- CPU Datapath Diagram -->
+    <div>
+      <div class="panel-header">CPU Datapath</div>
+      <div class="datapath-wrap">
+        <svg width="100%" viewBox="0 0 460 230" id="datapath-svg">
+          <defs>
+            <marker id="arr2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="#4f8ef7" stroke-width="1.5" stroke-linecap="round"/>
+            </marker>
+            <marker id="arr-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="#34d399" stroke-width="1.5" stroke-linecap="round"/>
+            </marker>
+            <marker id="arr-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+              <path d="M2 1L8 5L2 9" fill="none" stroke="#f59e0b" stroke-width="1.5" stroke-linecap="round"/>
+            </marker>
+          </defs>
+          <!-- Memory block -->
+          <rect x="10" y="30" width="80" height="170" rx="5" fill="#1e2436" stroke="#2a3050" stroke-width="0.8"/>
+          <text x="50" y="24" text-anchor="middle" font-size="10" fill="#64748b" font-weight="600" letter-spacing="1">MEMORY</text>
+          <text x="50" y="48" text-anchor="middle" font-size="9" fill="#64748b">Addr 0..15</text>
+          <line x1="10" y1="55" x2="90" y2="55" stroke="#2a3050" stroke-width="0.5"/>
+          <text x="50" y="68" text-anchor="middle" font-size="9" fill="#94a3b8" id="mem-disp-0">00: 0</text>
+          <text x="50" y="80" text-anchor="middle" font-size="9" fill="#94a3b8" id="mem-disp-1">01: 0</text>
+          <text x="50" y="92" text-anchor="middle" font-size="9" fill="#94a3b8" id="mem-disp-2">02: 0</text>
+          <text x="50" y="104" text-anchor="middle" font-size="9" fill="#94a3b8" id="mem-disp-3">03: 0</text>
+          <text x="50" y="116" text-anchor="middle" font-size="9" fill="#94a3b8" id="mem-disp-4">04: 0</text>
+          <text x="50" y="128" text-anchor="middle" font-size="9" fill="#94a3b8">...</text>
+          <text x="50" y="142" text-anchor="middle" font-size="9" fill="#94a3b8" id="mem-disp-10">10: 5</text>
+          <text x="50" y="154" text-anchor="middle" font-size="9" fill="#94a3b8" id="mem-disp-11">11: 3</text>
+          <text x="50" y="166" text-anchor="middle" font-size="9" fill="#94a3b8" id="mem-disp-12">12: 0</text>
+          <text x="50" y="178" text-anchor="middle" font-size="9" fill="#94a3b8" id="mem-disp-13">13: 0</text>
+          <text x="50" y="190" text-anchor="middle" font-size="9" fill="#94a3b8" id="mem-disp-14">14: 0</text>
+
+          <!-- MAR/MDR -->
+          <rect x="115" y="60" width="70" height="30" rx="4" fill="#1e2436" stroke="#2a3050" stroke-width="0.8" id="rect-mar"/>
+          <text x="150" y="72" text-anchor="middle" font-size="9" fill="#64748b" font-weight="600">MAR</text>
+          <text x="150" y="83" text-anchor="middle" font-size="9" fill="#4f8ef7" id="svg-mar">—</text>
+
+          <rect x="115" y="110" width="70" height="30" rx="4" fill="#1e2436" stroke="#2a3050" stroke-width="0.8" id="rect-mdr"/>
+          <text x="150" y="122" text-anchor="middle" font-size="9" fill="#64748b" font-weight="600">MDR</text>
+          <text x="150" y="133" text-anchor="middle" font-size="9" fill="#4f8ef7" id="svg-mdr">—</text>
+
+          <!-- PC -->
+          <rect x="115" y="16" width="70" height="30" rx="4" fill="#1e2436" stroke="#2a3050" stroke-width="0.8" id="rect-pc"/>
+          <text x="150" y="28" text-anchor="middle" font-size="9" fill="#64748b" font-weight="600">PC</text>
+          <text x="150" y="39" text-anchor="middle" font-size="9" fill="#4f8ef7" id="svg-pc">0</text>
+
+          <!-- IR -->
+          <rect x="220" y="60" width="80" height="30" rx="4" fill="#1e2436" stroke="#2a3050" stroke-width="0.8" id="rect-ir"/>
+          <text x="260" y="72" text-anchor="middle" font-size="9" fill="#64748b" font-weight="600">IR</text>
+          <text x="260" y="83" text-anchor="middle" font-size="8" fill="#f59e0b" id="svg-ir">—</text>
+
+          <!-- ALU -->
+          <polygon points="220,120 300,110 300,155 220,165" fill="#1e2436" stroke="#2a3050" stroke-width="0.8" id="poly-alu"/>
+          <text x="255" y="138" text-anchor="middle" font-size="10" fill="#64748b" font-weight="700">ALU</text>
+
+          <!-- ACC -->
+          <rect x="330" y="115" width="65" height="30" rx="4" fill="#1e2436" stroke="#2a3050" stroke-width="0.8" id="rect-acc"/>
+          <text x="362" y="127" text-anchor="middle" font-size="9" fill="#64748b" font-weight="600">ACC</text>
+          <text x="362" y="138" text-anchor="middle" font-size="9" fill="#34d399" id="svg-acc">0</text>
+
+          <!-- CU -->
+          <rect x="330" y="50" width="65" height="40" rx="4" fill="#1e2436" stroke="#2a3050" stroke-width="0.8"/>
+          <text x="362" y="65" text-anchor="middle" font-size="9" fill="#64748b" font-weight="600">CONTROL</text>
+          <text x="362" y="76" text-anchor="middle" font-size="9" fill="#64748b" font-weight="600">UNIT</text>
+          <text x="362" y="85" text-anchor="middle" font-size="8" fill="#4f8ef7" id="svg-cu">IDLE</text>
+
+          <!-- Buses / arrows (static layout) -->
+          <!-- Memory → MAR (address bus) -->
+          <line x1="91" y1="75" x2="113" y2="75" stroke="#4f8ef7" stroke-width="0.8" stroke-dasharray="3 2" marker-end="url(#arr2)" id="bus-mem-mar" opacity="0.3"/>
+          <!-- Memory → MDR (data bus) -->
+          <line x1="91" y1="125" x2="113" y2="125" stroke="#4f8ef7" stroke-width="0.8" stroke-dasharray="3 2" marker-end="url(#arr2)" id="bus-mem-mdr" opacity="0.3"/>
+          <!-- MAR → IR (fetch) -->
+          <line x1="187" y1="75" x2="218" y2="75" stroke="#f59e0b" stroke-width="0.8" stroke-dasharray="3 2" marker-end="url(#arr-amber)" id="bus-mar-ir" opacity="0.3"/>
+          <!-- MDR → ALU -->
+          <line x1="187" y1="125" x2="219" y2="140" stroke="#4f8ef7" stroke-width="0.8" stroke-dasharray="3 2" marker-end="url(#arr2)" id="bus-mdr-alu" opacity="0.3"/>
+          <!-- ALU → ACC -->
+          <line x1="301" y1="133" x2="328" y2="130" stroke="#34d399" stroke-width="0.8" stroke-dasharray="3 2" marker-end="url(#arr-green)" id="bus-alu-acc" opacity="0.3"/>
+          <!-- ACC → ALU feedback -->
+          <path d="M362 147 L362 170 L210 170 L210 155" fill="none" stroke="#34d399" stroke-width="0.8" stroke-dasharray="3 2" marker-end="url(#arr-green)" id="bus-acc-alu" opacity="0.3"/>
+          <!-- PC → MAR -->
+          <line x1="150" y1="47" x2="150" y2="58" stroke="#4f8ef7" stroke-width="0.8" stroke-dasharray="3 2" marker-end="url(#arr2)" id="bus-pc-mar" opacity="0.3"/>
+          <!-- CU → IR -->
+          <line x1="328" y1="70" x2="302" y2="70" stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="3 2" marker-end="url(#arr2)" id="bus-cu-ir" opacity="0.2"/>
+
+          <!-- Labels -->
+          <text x="100" y="73" text-anchor="middle" font-size="7" fill="#2a3050">Addr</text>
+          <text x="100" y="123" text-anchor="middle" font-size="7" fill="#2a3050">Data</text>
+        </svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- Panel 3: Memory View -->
+  <div class="panel" style="grid-row: 2; grid-column: 1;">
+    <div class="panel-header">Memory Map</div>
+    <table class="mem-table">
+      <thead><tr><th>Addr</th><th>Value</th><th>Content</th><th>Note</th></tr></thead>
+      <tbody id="mem-tbody"></tbody>
+    </table>
+  </div>
+
+  <!-- Panel 4: Execution Log -->
+  <div class="panel" style="grid-row: 2; grid-column: 2;">
+    <div class="panel-header">Execution Log</div>
+    <div class="log" id="exec-log">
+      <div class="log-entry"><span class="msg" style="color:var(--text3)">Load a program to begin...</span></div>
+    </div>
+    <div style="margin-top:10px;">
+      <div class="panel-header" style="margin-bottom:8px">Sample Programs</div>
+      <div style="display:flex; flex-wrap:wrap; gap:6px;">
+        <button class="btn" onclick="loadSample('add')">Add Two Numbers</button>
+        <button class="btn" onclick="loadSample('loop')">Count Loop</button>
+        <button class="btn" onclick="loadSample('sub')">Subtraction</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="statusbar">
+  <span>Cycle: <b id="sb-cycle">0</b></span>
+  <span>PC: <b id="sb-pc">0</b></span>
+  <span>ACC: <b id="sb-acc">0</b></span>
+  <span>Phase: <b id="sb-phase">IDLE</b></span>
+  <span>Status: <b id="sb-status">Ready</b></span>
+</div>
+
+<script>
+// ── CPU State ──────────────────────────────────────────────────────────────
+const MEM_SIZE = 32;
+let cpu = {
+  pc: 0, ir: null, acc: 0, mar: null, mdr: null,
+  memory: new Array(MEM_SIZE).fill(0),
+  instructions: [],   // parsed program in instruction space (addrs 0..9)
+  cycle: 0,
+  phase: 'IDLE',      // IDLE | FETCH | DECODE | EXECUTE | WRITEBACK | HALT
+  halted: false,
+  subPhase: 0         // for step-by-step within a phase
+};
+let running = false;
+let runTimer = null;
+
+// Samples
+const SAMPLES = {
+  add: `; Add Mem[10] + Mem[11] → Mem[12]
+LOAD 10
+ADD 11
+STORE 12
+HALT`,
+  loop: `; Count: Mem[10] counts up 3 times
+; Mem[10]=0, Mem[11]=1, Mem[12]=3 (limit)
+LOAD 10
+ADD 11
+STORE 10
+SUB 12
+JUMP 0
+HALT`,
+  sub: `; Subtract Mem[11] from Mem[10] → Mem[12]
+; Mem[10]=9, Mem[11]=4
+LOAD 10
+SUB 11
+STORE 12
+HALT`
+};
+
+// ── Initialize data inputs ───────────────────────────────────────────────
+function buildDataInputs() {
+  const container = document.getElementById('data-inputs');
+  container.innerHTML = '';
+  for (let i = 10; i <= 19; i++) {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:2px;';
+    wrap.innerHTML = `<span style="font-size:10px;color:var(--text3)">M[${i}]</span>
+      <input type="number" value="${cpu.memory[i]}" style="width:50px;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:4px;padding:3px 5px;font-size:12px;text-align:center;"
+        onchange="cpu.memory[${i}]=parseInt(this.value)||0; updateMemDisplay();">`;
+    container.appendChild(wrap);
+  }
+}
+
+// ── Parse program ─────────────────────────────────────────────────────────
+function loadProgram() {
+  const src = document.getElementById('prog-editor').value;
+  const lines = src.split('\n');
+  cpu.instructions = [];
+  let addr = 0;
+  for (let line of lines) {
+    line = line.replace(/;.*/, '').trim();
+    if (!line) continue;
+    const parts = line.split(/\s+/);
+    const op = parts[0].toUpperCase();
+    const operand = parts[1] !== undefined ? parseInt(parts[1]) : null;
+    cpu.instructions.push({ op, operand, src: line, addr });
+    cpu.memory[addr] = encodeInstr(op, operand);
+    addr++;
+  }
+  // default data
+  document.querySelectorAll('#data-inputs input').forEach((inp, i) => {
+    cpu.memory[10 + i] = parseInt(inp.value) || 0;
+  });
+
+  resetRegisters();
+  addLog(0, '', `Program loaded (${cpu.instructions.length} instructions). Memory initialized.`, 'info');
+  updateAll();
+  document.getElementById('btn-step').disabled = false;
+  document.getElementById('btn-run').disabled = false;
+  document.getElementById('cpu-status-badge').textContent = 'LOADED';
+}
+
+function encodeInstr(op, operand) {
+  const OPS = { LOAD:1, STORE:2, ADD:3, SUB:4, JUMP:5, HALT:0 };
+  return ((OPS[op] || 0) << 8) | (operand & 0xFF || 0);
+}
+
+function decodeInstr(encoded) {
+  const OPS = [null,'LOAD','STORE','ADD','SUB','JUMP'];
+  const opcode = (encoded >> 8) & 0xFF;
+  const operand = encoded & 0xFF;
+  const op = opcode === 0 ? 'HALT' : (OPS[opcode] || 'NOP');
+  return { op, operand };
+}
+
+function resetRegisters() {
+  cpu.pc = 0; cpu.ir = null; cpu.acc = 0;
+  cpu.mar = null; cpu.mdr = null;
+  cpu.cycle = 0; cpu.phase = 'IDLE';
+  cpu.halted = false; cpu.subPhase = 0;
+}
+
+// ── Step CPU ──────────────────────────────────────────────────────────────
+function stepCPU() {
+  if (cpu.halted) return;
+
+  // Simple full-instruction step (all 4 sub-phases at once but shown)
+  cpu.cycle++;
+  const cycleN = cpu.cycle;
+
+  // FETCH
+  setCyclePhase('FETCH');
+  cpu.mar = cpu.pc;
+  const encoded = cpu.memory[cpu.pc];
+  cpu.mdr = encoded;
+  const { op, operand } = decodeInstr(encoded);
+  cpu.ir = op + (operand !== null && op !== 'HALT' ? ' ' + operand : '');
+  cpu.pc++;
+  highlightBus('bus-pc-mar', 200);
+  highlightBus('bus-mem-mdr', 400);
+
+  // DECODE
+  setTimeout(() => {
+    setCyclePhase('DECODE');
+    highlightBus('bus-mar-ir', 200);
+  }, 300);
+
+  // EXECUTE + WRITEBACK
+  setTimeout(() => {
+    setCyclePhase('EXECUTE');
+    let msg = '';
+    let writeBack = false;
+    let result = cpu.acc;
+
+    if (op === 'LOAD') {
+      cpu.mar = operand;
+      cpu.mdr = cpu.memory[operand];
+      result = cpu.mdr;
+      msg = `ACC ← Mem[${operand}] = ${result}`;
+      highlightBus('bus-mem-mdr', 200);
+    } else if (op === 'STORE') {
+      cpu.mar = operand;
+      cpu.memory[operand] = cpu.acc;
+      msg = `Mem[${operand}] ← ACC = ${cpu.acc}`;
+      highlightBus('bus-mdr-alu', 200);
+    } else if (op === 'ADD') {
+      cpu.mar = operand;
+      cpu.mdr = cpu.memory[operand];
+      result = cpu.acc + cpu.mdr;
+      msg = `ACC = ${cpu.acc} + Mem[${operand}](${cpu.mdr}) = ${result}`;
+      highlightBus('bus-mdr-alu', 200);
+      highlightBus('bus-alu-acc', 400);
+    } else if (op === 'SUB') {
+      cpu.mar = operand;
+      cpu.mdr = cpu.memory[operand];
+      result = cpu.acc - cpu.mdr;
+      msg = `ACC = ${cpu.acc} - Mem[${operand}](${cpu.mdr}) = ${result}`;
+      highlightBus('bus-mdr-alu', 200);
+      highlightBus('bus-alu-acc', 400);
+    } else if (op === 'JUMP') {
+      cpu.pc = operand;
+      msg = `PC ← ${operand}`;
+    } else if (op === 'HALT') {
+      cpu.halted = true;
+      cpu.phase = 'HALT';
+      setCyclePhase('HALT');
+      addLog(cycleN, 'HALT', 'Program halted.', 'halt');
+      setStatus('HALT');
+      updateAll();
+      document.getElementById('btn-step').disabled = true;
+      document.getElementById('btn-run').disabled = true;
+      pauseCPU();
+      return;
+    }
+
+    setTimeout(() => {
+      setCyclePhase('WRITEBACK');
+      if (op === 'LOAD' || op === 'ADD' || op === 'SUB') {
+        cpu.acc = result;
+        highlightBus('bus-acc-alu', 200);
+      }
+      addLog(cycleN, op + (operand !== undefined ? ' ' + operand : ''), msg, 'ok');
+      updateAll();
+      if (cpu.halted) setStatus('HALTED');
+      else setStatus('RUNNING');
+    }, 300);
+
+  }, 600);
+
+  updateAll();
+}
+
+function highlightBus(id, delay) {
+  setTimeout(() => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.style.opacity = '1';
+    el.style.strokeDasharray = '0';
+    setTimeout(() => {
+      el.style.opacity = '0.3';
+      el.style.strokeDasharray = '3 2';
+    }, 600);
+  }, delay);
+}
+
+// ── Run / Pause ───────────────────────────────────────────────────────────
+function runCPU() {
+  if (cpu.halted) return;
+  running = true;
+  document.getElementById('btn-run').disabled = true;
+  document.getElementById('btn-pause').disabled = false;
+  document.getElementById('btn-step').disabled = true;
+  setStatus('RUNNING');
+  scheduleRun();
+}
+
+function scheduleRun() {
+  if (!running || cpu.halted) { pauseCPU(); return; }
+  const delay = 1050 - parseInt(document.getElementById('speed-slider').value);
+  stepCPU();
+  runTimer = setTimeout(scheduleRun, delay + 800);
+}
+
+function pauseCPU() {
+  running = false;
+  clearTimeout(runTimer);
+  document.getElementById('btn-run').disabled = cpu.halted;
+  document.getElementById('btn-pause').disabled = true;
+  document.getElementById('btn-step').disabled = cpu.halted;
+  if (!cpu.halted) setStatus('PAUSED');
+}
+
+function resetCPU() {
+  pauseCPU();
+  cpu.memory = new Array(MEM_SIZE).fill(0);
+  cpu.instructions = [];
+  resetRegisters();
+  document.getElementById('btn-step').disabled = true;
+  document.getElementById('btn-run').disabled = true;
+  document.getElementById('exec-log').innerHTML = '<div class="log-entry"><span class="msg" style="color:var(--text3)">Reset. Load a program to begin...</span></div>';
+  buildDataInputs();
+  updateAll();
+  setCyclePhase('IDLE');
+  document.getElementById('cpu-status-badge').textContent = 'IDLE';
+  setStatus('Ready');
+}
+
+function loadSample(key) {
+  document.getElementById('prog-editor').value = SAMPLES[key];
+  // set appropriate data
+  if (key === 'add') {
+    cpu.memory[10]=5; cpu.memory[11]=3; cpu.memory[12]=0;
+  } else if (key === 'loop') {
+    cpu.memory[10]=0; cpu.memory[11]=1; cpu.memory[12]=3;
+  } else if (key === 'sub') {
+    cpu.memory[10]=9; cpu.memory[11]=4; cpu.memory[12]=0;
+  }
+  buildDataInputs();
+}
+
+// ── Update UI ─────────────────────────────────────────────────────────────
+function updateAll() {
+  // registers panel
+  document.getElementById('val-pc').textContent = cpu.pc;
+  document.getElementById('val-ir').textContent = cpu.ir || '—';
+  document.getElementById('val-acc').textContent = cpu.acc;
+  document.getElementById('val-mar').textContent = cpu.mar !== null ? cpu.mar : '—';
+  document.getElementById('val-mdr').textContent = cpu.mdr !== null ? cpu.mdr : '—';
+  document.getElementById('val-cu').textContent = cpu.phase;
+
+  // SVG values
+  document.getElementById('svg-pc').textContent = cpu.pc;
+  document.getElementById('svg-ir').textContent = cpu.ir ? cpu.ir.substring(0,10) : '—';
+  document.getElementById('svg-acc').textContent = cpu.acc;
+  document.getElementById('svg-mar').textContent = cpu.mar !== null ? cpu.mar : '—';
+  document.getElementById('svg-mdr').textContent = cpu.mdr !== null ? cpu.mdr : '—';
+  document.getElementById('svg-cu').textContent = cpu.phase;
+
+  // memory table
+  updateMemDisplay();
+  buildMemTable();
+
+  // status bar
+  document.getElementById('sb-cycle').textContent = cpu.cycle;
+  document.getElementById('sb-pc').textContent = cpu.pc;
+  document.getElementById('sb-acc').textContent = cpu.acc;
+  document.getElementById('sb-phase').textContent = cpu.phase;
+}
+
+function updateMemDisplay() {
+  const labels = [0,1,2,3,4,10,11,12,13,14];
+  const ids     = [0,1,2,3,4,10,11,12,13,14];
+  for (let idx = 0; idx < 5; idx++) {
+    const el = document.getElementById(`mem-disp-${idx}`);
+    if (el) el.textContent = `${String(idx).padStart(2,'0')}: ${cpu.memory[idx]}`;
+  }
+  for (let idx = 10; idx <= 14; idx++) {
+    const el = document.getElementById(`mem-disp-${idx}`);
+    if (el) el.textContent = `${idx}: ${cpu.memory[idx]}`;
+  }
+}
+
+function buildMemTable() {
+  const tbody = document.getElementById('mem-tbody');
+  tbody.innerHTML = '';
+  const show = [...Array(10).keys(), 10,11,12,13,14,15,16,17,18,19];
+  const notes = { 10:'data', 11:'data', 12:'data (result)', 13:'data', 14:'data' };
+  for (let a of show) {
+    const tr = document.createElement('tr');
+    const isPC = a === cpu.pc && !cpu.halted;
+    const isModified = a >= 10 && cpu.memory[a] !== 0;
+    if (isPC) tr.className = 'pc-row';
+    else if (isModified) tr.className = 'modified';
+    const instr = a < 10 && cpu.instructions[a] ? cpu.instructions[a].src : '';
+    tr.innerHTML = `<td class="mem-row-addr">${String(a).padStart(2,'0')}</td>
+      <td>${cpu.memory[a]}</td>
+      <td style="color:var(--text2);font-size:11px">${instr}</td>
+      <td style="color:var(--text3);font-size:10px">${notes[a]||''} ${isPC?'← PC':''}</td>`;
+    tbody.appendChild(tr);
+  }
+}
+
+function setCyclePhase(phase) {
+  cpu.phase = phase;
+  const steps = ['fetch','decode','execute','writeback'];
+  const activeMap = { FETCH:'fetch', DECODE:'decode', EXECUTE:'execute', WRITEBACK:'writeback', HALT:'writeback' };
+  const active = activeMap[phase] || null;
+  const activeIdx = steps.indexOf(active);
+
+  steps.forEach((s, i) => {
+    const el = document.getElementById('step-' + s);
+    el.className = 'cycle-step';
+    if (s === active) el.classList.add('active');
+    else if (activeIdx > i) el.classList.add('done');
+  });
+
+  const descs = {
+    IDLE:      'CPU is idle. Load a program to begin.',
+    FETCH:     'FETCH: PC → MAR, Memory[MAR] → MDR → IR, PC++',
+    DECODE:    'DECODE: Control Unit interprets opcode in IR.',
+    EXECUTE:   'EXECUTE: ALU or control logic performs operation.',
+    WRITEBACK: 'WRITE BACK: Result stored to ACC or Memory.',
+    HALT:      'HALT: Execution stopped.'
+  };
+  document.getElementById('cycle-desc').textContent = descs[phase] || '';
+  document.getElementById('sb-phase').textContent = phase;
+}
+
+function addLog(cycle, instr, msg, type) {
+  const log = document.getElementById('exec-log');
+  const div = document.createElement('div');
+  div.className = 'log-entry' + (type === 'error' ? ' error' : type === 'halt' ? ' halt' : '');
+  div.innerHTML = `<span class="cyc">[${String(cycle).padStart(3,'0')}]</span> <span class="instr">${instr.padEnd(12,' ')}</span> <span class="msg">${msg}</span>`;
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+}
+
+function setStatus(s) {
+  document.getElementById('sb-status').textContent = s;
+  document.getElementById('cpu-status-badge').textContent = s;
+}
+
+// Speed slider label
+document.getElementById('speed-slider').addEventListener('input', function() {
+  document.getElementById('speed-label').textContent = this.value + 'ms';
+});
+
+// Init
+buildDataInputs();
+updateAll();
+setCyclePhase('IDLE');
+loadSample('add');
+</script>
+</body>
+</html>
